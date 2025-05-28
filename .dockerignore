@@ -1,0 +1,32 @@
+# Votechain_ML/.dockerignore
+
+# Python virtual environment
+.venv/
+
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# IDE and OS specific
+.vscode/
+.idea/
+.DS_Store
+*.swp
+
+# Local uploads folder (if you don't want local test files in the image)
+# uploads/* # Comment this out if you *do* want to include existing dummy uploads
+           # But generally, the app should handle an empty uploads dir.
+
+# Local environment files
+.env
+
+# Git directory
+.git/
+.gitignore
+
+# Test reports, coverage, etc.
+.pytest_cache/
+.coverage
+htmlcov/
