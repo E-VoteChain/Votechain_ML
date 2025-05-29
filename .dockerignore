@@ -17,7 +17,7 @@ __pycache__/
 
 # Local uploads folder (if you don't want local test files in the image)
 # uploads/* # Comment this out if you *do* want to include existing dummy uploads
-           # But generally, the app should handle an empty uploads dir.
+# But generally, the app should handle an empty uploads dir.
 
 # Local environment files
 .env
