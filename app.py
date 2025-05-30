@@ -52,6 +52,13 @@ with app.app_context(): # Ensures this runs within Flask's application context
     db_storer.create_user_table_if_not_exists()
     
     
+    
+# In app.py
+@app.route('/healthz', methods=['GET'])
+def health_check():
+    return jsonify({"status": "healthy"}), 200
+
+
 @app.route('/process_and_verify', methods=['POST'])
 def process_and_verify_endpoint():
     if gemini_model_instance is None:
