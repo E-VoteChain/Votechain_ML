@@ -54,4 +54,4 @@ EXPOSE ${PORT}
 # --workers: Number of worker processes. Start with 2-4.
 # --threads: Number of threads per worker (if your tasks are I/O bound or release GIL).
 # --timeout: Worker timeout in seconds. ML can be slow.
-CMD ["gunicorn", "--bind", "0.0.0.0:$PORT", "--workers", "2", "--threads", "2", "--timeout", "120", "app:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:${PORT:-8080}", "--workers", "2", "--threads", "2", "--timeout", "120", "app:app"]
