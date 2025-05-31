@@ -29,12 +29,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Copy the cleaned requirements file.
-COPY requirements_render.txt ./
+COPY requirements_final_cpu.txt ./
 
 # Install Python dependencies.
 # --no-cache-dir is good practice for smaller image sizes.
 # Increase timeout to 5 minutes (300 seconds) - adjust as needed
-RUN pip install --default-timeout=300 --no-cache-dir -r requirements_render.txt
+RUN pip install --default-timeout=300 --no-cache-dir -r requirements_final_cpu.txt
 
 # Copy your application code into the container.
 # This includes app.py, the ml_logic/ folder, dummy_face_for_liveness.jpg, etc.
@@ -56,4 +56,5 @@ EXPOSE ${PORT}
 # --timeout: Worker timeout in seconds. ML can be slow.
 
 # CMD ["gunicorn", "--bind", "0.0.0.0:$PORT", "--workers", "2", "--threads", "2", "--timeout", "120", "app:app"]
-CMD gunicorn --bind "0.0.0.0:$PORT" --workers 2 --threads 2 --timeout 120 app:app
+# CMD gunicorn --bind "0.0.0.0:$PORT" --workers 2 --threads 2 --timeout 120 app:app
+CMD ["/bin/sh", "-c", "exec gunicorn --bind \"0.0.0.0:$PORT\" --workers 2 --threads 2 --timeout 120 app:app"]
