@@ -43,6 +43,7 @@ tests/
 # If you have some *essential* files that MUST be in uploads at build time,
 # then you would not ignore it, but this is rare for a typical uploads dir.
 uploads/
+deepface_weights/
 
 # Runtime file from Heroku/other PaaS, likely not needed for Docker/Render
 runtime.txt
