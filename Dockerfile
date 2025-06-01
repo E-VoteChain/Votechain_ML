@@ -56,4 +56,6 @@ COPY . .
 RUN mkdir -p /app/uploads
 
 EXPOSE ${PORT}
-CMD ["/bin/sh", "-c", "exec gunicorn --bind \"0.0.0.0:$PORT\" --workers 2 --threads 2 --timeout 120 app:app"]
+
+# CMD ["/bin/sh", "-c", "exec gunicorn --bind \"0.0.0.0:$PORT\" --workers 2 --threads 2 --timeout 120 app:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:$PORT", "--workers", "1", "--timeout", "120", "--log-level", "info", "app:app"]
