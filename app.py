@@ -286,6 +286,13 @@ logging.info("Flask app instance created and CORS enabled.")
 # Gunicorn will typically create multiple worker processes. Each worker
 # will run this initialization code.
 # The `IF NOT EXISTS` in your SQL handles concurrent table creation attempts.
+           
+           
+def allowed_file(filename):
+    """Checks if the uploaded file has an allowed extension."""
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
 def initialize_database():
     logging.info("Attempting to initialize database table...")
     try:
