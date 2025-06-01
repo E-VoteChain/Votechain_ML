@@ -5,6 +5,7 @@ import traceback
 import os
 import re
 import json # To store embedding as JSON string
+import logging
 from urllib.parse import urlparse # For parsing DATABASE_URL
 
 def get_db_connection_params():
@@ -57,37 +58,92 @@ def get_db_connection_params():
             "password": os.getenv("DB_PASSWORD", "root")
         }
 
+# def create_user_table_if_not_exists():
+#     """Creates the user_id_details table if it doesn't already exist."""
+#     conn = None
+#     cur = None
+#     params_dict = get_db_connection_params()
+    
+#     # Prepare connection arguments
+#     # If DATABASE_URL was parsed successfully, params_dict contains 'dsn'
+#     # psycopg2.connect() can take a DSN string directly or keyword arguments.
+#     # We'll use the DSN if available, otherwise unpack the dict for keyword args.
+    
+#     connect_args = {}
+#     if 'dsn' in params_dict:
+#         # If using the DSN directly:
+#         # Note: Railway often provides a "postgres://" scheme, which psycopg2 usually handles fine.
+#         # If you encounter issues, you might need to replace "postgres://" with "postgresql://".
+#         # Example: dsn_to_use = params_dict['dsn'].replace("postgres://", "postgresql://", 1)
+#         dsn_to_use = params_dict['dsn']
+#         if dsn_to_use.startswith("postgres://"): # Ensure psycopg2 compatibility
+#              dsn_to_use = dsn_to_use.replace("postgres://", "postgresql://", 1)
+#         connect_args['dsn'] = dsn_to_use
+#         print(f"Connecting using DSN: {dsn_to_use[:30]}...")
+#     else:
+#         # Fallback to individual parameters
+#         connect_args = {k: v for k, v in params_dict.items() if k not in ['dsn', 'scheme']} # Exclude helper keys
+#         print(f"Connecting using individual params: host={connect_args.get('host')}")
+
+
+#     try:
+#         conn = psycopg2.connect(**connect_args)
+#         cur = conn.cursor()
+#         create_table_query = """
+#         CREATE TABLE IF NOT EXISTS user_id_details (
+#             id SERIAL PRIMARY KEY,
+#             card_type VARCHAR(50),
+#             name VARCHAR(255),
+#             dob VARCHAR(20),
+#             aadhaar_no VARCHAR(50) UNIQUE,
+#             pan_no VARCHAR(50) UNIQUE,
+#             license_no VARCHAR(50) UNIQUE,
+#             voter_id_number VARCHAR(50) UNIQUE,
+#             expiration_date VARCHAR(20),
+#             father_mother_name VARCHAR(255),
+#             face_embedding TEXT,
+#             registration_timestamp TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+#         );
+#         """
+#         cur.execute(create_table_query)
+#         conn.commit()
+#         print("Table 'user_id_details' checked/created successfully.")
+#     except psycopg2.Error as db_err:
+#         print(f"Database error during table creation: {db_err}")
+#         traceback.print_exc()
+#     except Exception as e:
+#         print(f"An unexpected error occurred during table creation: {e}")
+#         traceback.print_exc()
+#     finally:
+#         if cur: cur.close()
+#         if conn: conn.close()
+
+
+
+
 def create_user_table_if_not_exists():
-    """Creates the user_id_details table if it doesn't already exist."""
     conn = None
     cur = None
-    params_dict = get_db_connection_params()
-    
-    # Prepare connection arguments
-    # If DATABASE_URL was parsed successfully, params_dict contains 'dsn'
-    # psycopg2.connect() can take a DSN string directly or keyword arguments.
-    # We'll use the DSN if available, otherwise unpack the dict for keyword args.
+    params_dict = get_db_connection_params() # This already prints "Connecting using DSN..."
     
     connect_args = {}
     if 'dsn' in params_dict:
-        # If using the DSN directly:
-        # Note: Railway often provides a "postgres://" scheme, which psycopg2 usually handles fine.
-        # If you encounter issues, you might need to replace "postgres://" with "postgresql://".
-        # Example: dsn_to_use = params_dict['dsn'].replace("postgres://", "postgresql://", 1)
         dsn_to_use = params_dict['dsn']
-        if dsn_to_use.startswith("postgres://"): # Ensure psycopg2 compatibility
+        if dsn_to_use.startswith("postgres://"):
              dsn_to_use = dsn_to_use.replace("postgres://", "postgresql://", 1)
         connect_args['dsn'] = dsn_to_use
-        print(f"Connecting using DSN: {dsn_to_use[:30]}...")
+        # logging.info(f"Connecting using DSN (from db_storer): {dsn_to_use[:30]}...") # Already logged in app.py's call to get_db_connection_params
     else:
-        # Fallback to individual parameters
-        connect_args = {k: v for k, v in params_dict.items() if k not in ['dsn', 'scheme']} # Exclude helper keys
-        print(f"Connecting using individual params: host={connect_args.get('host')}")
+        connect_args = {k: v for k, v in params_dict.items() if k not in ['dsn', 'scheme']}
+        # logging.info(f"Connecting using individual params (from db_storer): host={connect_args.get('host')}")
 
-
+    logging.info("DB_STORER: Attempting psycopg2.connect()...") # NEW LOG
     try:
         conn = psycopg2.connect(**connect_args)
+        logging.info("DB_STORER: psycopg2.connect() successful.") # NEW LOG
         cur = conn.cursor()
+        logging.info("DB_STORER: Cursor created.") # NEW LOG
+        
         create_table_query = """
         CREATE TABLE IF NOT EXISTS user_id_details (
             id SERIAL PRIMARY KEY,
@@ -104,19 +160,33 @@ def create_user_table_if_not_exists():
             registration_timestamp TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
         );
         """
+        logging.info("DB_STORER: Executing CREATE TABLE query...") # NEW LOG
         cur.execute(create_table_query)
+        logging.info("DB_STORER: CREATE TABLE query executed.") # NEW LOG
         conn.commit()
-        print("Table 'user_id_details' checked/created successfully.")
-    except psycopg2.Error as db_err:
-        print(f"Database error during table creation: {db_err}")
-        traceback.print_exc()
-    except Exception as e:
-        print(f"An unexpected error occurred during table creation: {e}")
-        traceback.print_exc()
-    finally:
-        if cur: cur.close()
-        if conn: conn.close()
+        logging.info("DB_STORER: Transaction committed.") # NEW LOG
+        print("Table 'user_id_details' checked/created successfully.") # Your existing print
+        logging.info("Table 'user_id_details' checked/created successfully. (via logging)") # Match with logging
 
+    except psycopg2.Error as db_err:
+        logging.error(f"DB_STORER: Database error during table creation: {db_err}", exc_info=True) # exc_info=True for traceback
+        # traceback.print_exc() # Already covered by exc_info=True
+    except Exception as e:
+        logging.error(f"DB_STORER: An unexpected error occurred during table creation: {e}", exc_info=True)
+        # traceback.print_exc()
+    finally:
+        logging.info("DB_STORER: Entering finally block for DB connection cleanup.") # NEW LOG
+        if cur:
+            cur.close()
+            logging.info("DB_STORER: Cursor closed.") # NEW LOG
+        if conn:
+            conn.close()
+            logging.info("DB_STORER: Connection closed.") # NEW LOG
+        logging.info("DB_STORER: Exiting finally block.") # NEW LOG
+        
+        
+        
+        
 def store_verified_user_details(extracted_details, id_face_embedding_list):
     """
     Stores the extracted text details and the ID face embedding into the database.
