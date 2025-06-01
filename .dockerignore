@@ -1,32 +1,60 @@
-# Votechain_ML/.dockerignore
-
-# Python virtual environment
-.venv/
-
-# Python bytecode
+# General Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+*/ENV/
+*/env/
+*/venv/
+*/.venv/
 
 # IDE and OS specific
 .vscode/
 .idea/
-.DS_Store
-*.swp
+*.DS_Store
+Thumbs.db
 
-# Local uploads folder (if you don't want local test files in the image)
-# uploads/* # Comment this out if you *do* want to include existing dummy uploads
-# But generally, the app should handle an empty uploads dir.
-
-# Local environment files
-.env
-
-# Git directory
+# Git
 .git/
 .gitignore
 
-# Test reports, coverage, etc.
-.pytest_cache/
-.coverage
-htmlcov/
+# Test files and logs (if any, add specific patterns)
+*.log
+tests/
+# If you have large datasets or test images not needed for runtime, add them:
+# e.g., large_test_data/
+# e.g., notebooks/
+
+# Uploads folder - CRITICAL
+# If the 'uploads' folder contains temporary files from previous local runs
+# or test data that shouldn't be in the production image, ignore it.
+# The Dockerfile creates an empty 'uploads' directory within the image.
+# If you have some *essential* files that MUST be in uploads at build time,
+# then you would not ignore it, but this is rare for a typical uploads dir.
+uploads/
+
+# Runtime file from Heroku/other PaaS, likely not needed for Docker/Render
+runtime.txt
+
+# License and Readme are usually small, can be kept or ignored
+# LICENSE
+# README.md
+
+# Dummy face - if it's only for local testing and not needed by the deployed app,
+# you can ignore it. If the app needs it as a fallback or default, keep it.
+# dummy_face_for_liveness.jpg
+
+# Any other specific files/folders not needed in the production image
+# e.g. local_scripts/
+# e.g. documentation_files/
