@@ -1,152 +1,158 @@
-# ml_logic/face_verifier.py
 from deepface import DeepFace
 import numpy as np
 import traceback
 import os
 import json # For printing results if needed
+# cv2 import is not needed here unless you uncomment the __main__ block and use cv2.imwrite
 
-# Configuration (can be passed or set as constants)
-VERIFICATION_MODEL_NAME = 'Facenet' # Must match model used for ID card embedding
+# --- Configuration ---
+VERIFICATION_MODEL_NAME = 'Facenet'
 DISTANCE_METRIC = 'cosine'
-DETECTOR_BACKEND_LIVE = 'retinaface' # For live face detection
+DETECTOR_BACKEND_LIVE = 'retinaface'
+
+# --- Threshold Configuration ---
+CUSTOM_SYSTEM_THRESHOLD = 0.48  # YOUR DESIRED THRESHOLD FOR THE SYSTEM'S DECISION
 
 try:
-    VERIFICATION_THRESHOLD = DeepFace.verification.find_threshold(VERIFICATION_MODEL_NAME, DISTANCE_METRIC)
+    STANDARD_DEEPFACE_THRESHOLD = DeepFace.verification.find_threshold(VERIFICATION_MODEL_NAME, DISTANCE_METRIC)
+    print(f"Standard DeepFace threshold for {VERIFICATION_MODEL_NAME}/{DISTANCE_METRIC}: {STANDARD_DEEPFACE_THRESHOLD}")
 except Exception:
-    VERIFICATION_THRESHOLD = 0.40 # Fallback for cosine, adjust if using other metrics
-    print(f"Warning: Using fallback threshold {VERIFICATION_THRESHOLD} for {VERIFICATION_MODEL_NAME}/{DISTANCE_METRIC}")
+    STANDARD_DEEPFACE_THRESHOLD = 0.40 
+    print(f"Warning: Using fallback standard DeepFace threshold {STANDARD_DEEPFACE_THRESHOLD} for {VERIFICATION_MODEL_NAME}/{DISTANCE_METRIC}")
 
 
 def perform_liveness_check(live_image_path, dummy_reference_image_path):
-    """
-    Performs liveness check on the live_image_path using DeepFace's anti_spoofing.
-    Args:
-        live_image_path (str): Path to the live captured face image.
-        dummy_reference_image_path (str): Path to a dummy real face photo for reference.
-    Returns:
-        tuple: (liveness_passed (bool), liveness_outcome_message (str))
-    """
     print(f"\n--- Performing Liveness Check on: {live_image_path} ---")
     liveness_passed = False
-    liveness_outcome = "Not Performed"
+    liveness_outcome_message = "Not Performed"
 
+    if not os.path.exists(live_image_path):
+        print(f"Liveness FAILED: Live image not found at '{live_image_path}'")
+        return False, "Liveness FAILED: Live image file missing."
     if not os.path.exists(dummy_reference_image_path):
         print(f"CRITICAL ERROR: Dummy liveness reference image not found at '{dummy_reference_image_path}'")
         return False, "Liveness FAILED: System configuration error (missing reference image)."
 
     try:
-        # The verify call for liveness raises ValueError on spoof.
-        # The actual 'verified' result against the dummy image is not what we care about for liveness,
-        # only whether it raises a spoofing error or has 'is_spoof': True.
         liveness_result_dict = DeepFace.verify(
             img1_path=live_image_path,
-            img2_path=dummy_reference_image_path, # Reference against a known live face image
-            model_name=VERIFICATION_MODEL_NAME,   # Model doesn't matter as much for spoof
+            img2_path=dummy_reference_image_path,
+            model_name=VERIFICATION_MODEL_NAME,
             detector_backend=DETECTOR_BACKEND_LIVE,
-            distance_metric=DISTANCE_METRIC,      # Metric doesn't matter as much for spoof
+            distance_metric=DISTANCE_METRIC,
             anti_spoofing=True,
-            enforce_detection=True # Ensure faces are detected in both
+            enforce_detection=True
         )
         print(f"Liveness check (DeepFace.verify) raw result: {json.dumps(liveness_result_dict, default=str)}")
-
-        # If anti_spoofing is True, 'is_spoof' key should be present.
-        is_spoof_flag = liveness_result_dict.get("is_spoof", False) # Default to False if key missing
-
+        is_spoof_flag = liveness_result_dict.get("is_spoof", False)
         if is_spoof_flag:
-            liveness_outcome = "FAILED (Spoof Detected via 'is_spoof' flag)"
-            liveness_passed = False
+            liveness_outcome_message = "FAILED (Spoof Detected via 'is_spoof' flag)"
         else:
-            # No ValueError and is_spoof is False means live
-            liveness_outcome = "PASSED"
+            liveness_outcome_message = "PASSED"
             liveness_passed = True
-        
     except ValueError as ve:
         error_str = str(ve)
         original_cause_error_str = str(ve.__cause__) if ve.__cause__ else ""
         print(f"Liveness Check raised ValueError: {ve}")
         if ve.__cause__: print(f"Original cause: {ve.__cause__}")
-        
         if "Spoof detected" in error_str or "Spoof detected" in original_cause_error_str:
-            liveness_outcome = "FAILED (Spoof Detected via ValueError)"
+            liveness_outcome_message = "FAILED (Spoof Detected via ValueError)"
         elif "face could not be detected" in error_str.lower() or \
              ("face could not be detected" in original_cause_error_str.lower()):
-            liveness_outcome = "FAILED (Face Detection Error during Liveness)"
+            liveness_outcome_message = "FAILED (Face Detection Error during Liveness)"
         else:
-            liveness_outcome = f"ERROR (Other ValueError: {error_str[:100]})"
+            liveness_outcome_message = f"ERROR (Other ValueError: {error_str[:100]})"
         liveness_passed = False
     except Exception as e_live:
         print(f"Unexpected error during liveness check: {e_live}")
         traceback.print_exc()
-        liveness_outcome = f"ERROR (Unexpected: {str(e_live)[:100]})"
+        liveness_outcome_message = f"ERROR (Unexpected: {str(e_live)[:100]})"
         liveness_passed = False
-        
-    print(f"Liveness Outcome: {liveness_outcome}")
-    return liveness_passed, liveness_outcome
+    print(f"Liveness Outcome: {liveness_outcome_message}")
+    return liveness_passed, liveness_outcome_message
 
 
 def verify_faces(live_image_path, id_card_embedding_list):
-    """
-    Verifies the face in live_image_path against the stored id_card_embedding.
-    Args:
-        live_image_path (str): Path to the live captured face image.
-        id_card_embedding_list (list): The embedding list from the ID card.
-    Returns:
-        tuple: (verification_passed (bool), verification_details (dict))
-    """
-    print(f"\n--- Performing Face Verification: Live vs ID Card ---")
-    verification_passed = False
-    match_details = {"message": "Verification not fully performed"}
+    print(f"\n--- Performing Face Verification: Live vs ID Card (System Threshold: {CUSTOM_SYSTEM_THRESHOLD}) ---")
+    system_verification_passed = False 
+    # Initialize with a structure that matches the TS interface, using default/error values
+    match_details = {
+        "verified": False, # Will be updated based on CUSTOM_SYSTEM_THRESHOLD
+        "distance": "N/A",
+        "threshold": f"{CUSTOM_SYSTEM_THRESHOLD:.4f}", # System's threshold
+        "model": VERIFICATION_MODEL_NAME,
+        "metric": DISTANCE_METRIC,
+        "message": "Verification not fully performed or error occurred."
+        # "status" will be added by app.py by copying "message"
+        # Additional DeepFace specific info (optional, not directly in TS interface):
+        # "deepface_standard_threshold": f"{STANDARD_DEEPFACE_THRESHOLD:.4f}",
+        # "deepface_verified_flag": False,
+    }
 
-    if id_card_embedding_list is None:
-        match_details["message"] = "Cannot verify: Missing ID card embedding."
-        return False, match_details
+    if not os.path.exists(live_image_path):
+        match_details["message"] = "Face Verification FAILED: Live image file missing."
+        print(match_details["message"])
+        return False, match_details # system_verification_passed is already False
+
+    if id_card_embedding_list is None or not isinstance(id_card_embedding_list, list) or not id_card_embedding_list:
+        match_details["message"] = "Cannot verify: Missing or invalid ID card embedding."
+        print(match_details["message"])
+        return False, match_details # system_verification_passed is already False
 
     try:
-        # Verify live image against the pre-computed ID embedding
-        # anti_spoofing is False here as liveness is a separate step
         result = DeepFace.verify(
             img1_path=live_image_path,
-            img2_path=id_card_embedding_list, # Pass the pre-computed embedding
+            img2_path=id_card_embedding_list,
             model_name=VERIFICATION_MODEL_NAME,
             detector_backend=DETECTOR_BACKEND_LIVE,
             distance_metric=DISTANCE_METRIC,
-            anti_spoofing=False, # Liveness already checked
-            enforce_detection=True # Ensure face detected in live image
+            anti_spoofing=False,
+            enforce_detection=True
         )
         print(f"Face verification (DeepFace.verify) raw result: {json.dumps(result, default=str)}")
 
-        is_verified = result.get("verified", False)
-        distance = result.get("distance", float('inf'))
-        threshold = result.get("threshold", VERIFICATION_THRESHOLD) # Use threshold from result if available
+        distance_val = result.get("distance", float('inf'))
+        # deepface_internal_threshold_val = result.get("threshold", STANDARD_DEEPFACE_THRESHOLD)
+        # deepface_verified_flag_val = result.get("verified", False)
 
-        match_details = {
-            "verified": is_verified,
-            "distance": f"{distance:.4f}",
-            "threshold": f"{threshold:.4f}",
-            "model": VERIFICATION_MODEL_NAME,
-            "metric": DISTANCE_METRIC
-        }
-
-        if is_verified:
-            match_details["message"] = "Face Verification PASSED."
-            verification_passed = True
+        # YOUR SYSTEM'S VERIFICATION LOGIC using CUSTOM_SYSTEM_THRESHOLD
+        if distance_val <= CUSTOM_SYSTEM_THRESHOLD:
+            system_verification_passed = True
+            current_message = f"Face Verification PASSED (System Threshold: {CUSTOM_SYSTEM_THRESHOLD:.4f}, Distance: {distance_val:.4f})."
         else:
-            match_details["message"] = f"Face Verification FAILED (Distance: {distance:.4f} > Threshold: {threshold:.4f})."
+            system_verification_passed = False
+            current_message = f"Face Verification FAILED (System Threshold: {CUSTOM_SYSTEM_THRESHOLD:.4f}, Distance: {distance_val:.4f})."
+
+        # Update match_details with actual results, aligning with TS interface
+        match_details["verified"] = system_verification_passed
+        match_details["distance"] = f"{distance_val:.4f}"
+        match_details["threshold"] = f"{CUSTOM_SYSTEM_THRESHOLD:.4f}" # Show the threshold used by system
+        match_details["message"] = current_message
+        # Optional: include DeepFace's own assessment for debugging if needed elsewhere
+        # match_details["deepface_standard_threshold"] = f"{deepface_internal_threshold_val:.4f}"
+        # match_details["deepface_verified_flag"] = deepface_verified_flag_val
         
     except ValueError as ve:
         error_str = str(ve).lower()
+        er_msg = ""
         if "face could not be detected" in error_str:
-            match_details["message"] = "Face Verification FAILED: Face not detected in live image."
-        elif "embedding for face" in error_str and "could not be generated" in error_str: # For live image
-             match_details["message"] = "Face Verification FAILED: Could not generate embedding for live face."
+            er_msg = "Face Verification FAILED: Face not detected in live image."
+        elif "embedding for face" in error_str and "could not be generated" in error_str:
+             er_msg = "Face Verification FAILED: Could not generate embedding for live face."
         else:
-            match_details["message"] = f"Face Verification FAILED (ValueError: {str(ve)[:100]})"
+            er_msg = f"Face Verification FAILED (ValueError: {str(ve)[:150]})"
+        
+        match_details["message"] = er_msg
+        match_details["verified"] = False # Ensure this is False on error
         print(f"Error during face verification: {ve}")
-        traceback.print_exc()
+        if ve.__cause__: print(f"Original cause: {ve.__cause__}")
     except Exception as e_verify:
-        match_details["message"] = f"Face Verification FAILED (Unexpected Error: {str(e_verify)[:100]})"
+        er_msg = f"Face Verification FAILED (Unexpected Error: {str(e_verify)[:150]})"
+        match_details["message"] = er_msg
+        match_details["verified"] = False # Ensure this is False on error
         print(f"Unexpected error during face verification: {e_verify}")
         traceback.print_exc()
 
     print(f"Face Match Outcome: {match_details['message']}")
-    return verification_passed, match_details
+    return system_verification_passed, match_details
+

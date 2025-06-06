@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ID & Face Verification</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="container">
+      <h1>ID Card & Face Verification</h1>
+
+      <div class="upload-section">
+        <div class="upload-box">
+          <label for="id-card-image">1. Upload ID Card Image:</label>
+          <input
+            type="file"
+            id="id-card-image"
+            name="id_card_image"
+            accept="image/png, image/jpeg, image/jpg"
+            required
+          />
+          <img
+            id="id-card-preview"
+            src="#"
+            alt="ID Card Preview"
+            style="display: none"
+          />
+        </div>
+        <div class="upload-box">
+          <label for="live-face-image">2. Upload Live Face Image:</label>
+          <input
+            type="file"
+            id="live-face-image"
+            name="live_face_image"
+            accept="image/png, image/jpeg, image/jpg"
+            required
+          />
+          <img
+            id="live-face-preview"
+            src="#"
+            alt="Live Face Preview"
+            style="display: none"
+          />
+        </div>
+      </div>
+
+      <!-- <button id="verify-button">Verify Identity</button> -->
+      <button id="verify-button" type="button">Verify Identity</button>
+
+      <div id="progress-section" class="progress-section" style="display: none">
+        <h2>Processing Status:</h2>
+        <div class="status-indicator" id="status-overall">
+          <span class="spinner" style="display: none"></span>
+          Overall: <span class="status-text">Not Started</span>
+        </div>
+        <ul id="status-steps">
+          <li id="step-id-card">
+            <span class="step-icon">⏳</span> ID Card Processing:
+            <span class="status-text">Pending</span>
+            <div class="details" id="details-id-card"></div>
+          </li>
+          <li id="step-liveness">
+            <span class="step-icon">⏳</span> Liveness Check:
+            <span class="status-text">Pending</span>
+            <div class="details" id="details-liveness"></div>
+          </li>
+          <li id="step-face-verification">
+            <span class="step-icon">⏳</span> Face Verification:
+            <span class="status-text">Pending</span>
+            <div class="details" id="details-face-verification"></div>
+          </li>
+          <li id="step-database">
+            <span class="step-icon">⏳</span> Database Storage:
+            <span class="status-text">Pending</span>
+            <div class="details" id="details-database"></div>
+          </li>
+        </ul>
+      </div>
+
+      <div id="results-section" class="results-section" style="display: none">
+        <h2>Final Result:</h2>
+        <p id="final-status-message"></p>
+        <div id="extracted-details-display" style="display: none">
+          <h3>Extracted ID Details:</h3>
+          <pre id="extracted-details-json"></pre>
+        </div>
+      </div>
+    </div>
+    <script src="script.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+   </body>
+</html>
