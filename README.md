@@ -42,6 +42,66 @@ E-VoteChain solves all three with a **multi-factor biometric pipeline** backed b
 
 ---
 
+## 📸 System in Action
+
+### Step 1 — Identity Verification Page (Empty State)
+> Voter lands on the verification page — uploads Aadhar/Government ID on the left and takes a live photo on the right
+
+![Identity Verification - Empty](./screenshots/ss1_identity_verification_empty.png)
+
+---
+
+### Step 2 — Both Inputs Captured (Ready to Submit)
+> Document uploaded and live face captured — both green, status shows **"Ready to Submit"**
+
+![Identity Verification - Filled](./screenshots/ss2_identity_verification_filled.png)
+
+---
+
+### Step 3 — Verification Successful
+> All checks pass — Gemini OCR extracts name, DOB, document type, and number. Liveness, Face Verification, and Database Storage all pass.
+
+![Verification Results - Success](./screenshots/ss3_verification_success.png)
+
+---
+
+### Step 4 — Verification Details Breakdown
+> Full pipeline result: Document Processing ✅ · Liveness Detection ✅ · Face Matching ✅ (Facenet · Distance: 0.4499) · Data Storage ✅
+
+![Verification Details](./screenshots/ss4_verification_details.png)
+
+---
+
+## 📸 System in Action
+
+### Step 1 — Identity Verification UI (Empty State)
+> Voter lands on the verification page — upload Aadhar/PAN on the left, take a live selfie on the right
+
+![Identity Verification - Empty](docs/screenshots/step1_verification_empty.png)
+
+---
+
+### Step 2 — Documents Uploaded + Live Photo Captured
+> Both inputs filled — Aadhar card uploaded and live webcam photo captured. Status bar turns green: **Ready to Submit**
+
+![Identity Verification - Ready](docs/screenshots/step2_verification_ready.png)
+
+---
+
+### Step 3 — Verification Results
+> All checks passed. Gemini OCR successfully extracted **Name, DOB, Document Type & Number** from the Aadhar card. Unique **Verification ID** issued.
+
+![Verification Results](docs/screenshots/step3_verification_success.png)
+
+---
+
+### Step 4 — Verification Details Breakdown
+> Full pipeline audit — **Document Processing → Liveness Detection → Face Matching (Facenet · Distance: 0.4499) → Data Storage** — all passed ✅
+
+![Verification Details](docs/screenshots/step4_verification_details.png)
+
+---
+
 ## 🏗️ System Architecture
 
 ```
