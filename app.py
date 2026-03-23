@@ -23,7 +23,7 @@ load_dotenv() # Load .env file for local development
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if GEMINI_API_KEY:
     configure_gemini(api_key=GEMINI_API_KEY)
-    gemini_model_instance = GenerativeModel("gemini-1.5-flash") # Or your preferred model
+    gemini_model_instance = GenerativeModel("gemma-3-4b-it") # Or your preferred model
 else:
     print("CRITICAL: GEMINI_API_KEY not found. OCR functionality will fail.")
     gemini_model_instance = None # Handle this appropriately
