@@ -262,8 +262,8 @@ Built as part of the **E-VoteChain** initiative — a full-stack e-voting platfo
 
 | Role | Contributor |
 |---|---|
-| ML Pipeline & Backend | [Ayush Gupta](https://github.com/Ayushlion8) |
-| Blockchain & Frontend | E-VoteChain Team |
+| Frontend & ML Pipeline & Backend | [Ayush Gupta](https://github.com/Ayushlion8) |
+| Blockchain | E-VoteChain Team |
 
 ---
 
