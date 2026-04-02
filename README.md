@@ -135,6 +135,8 @@ else:
     reject_with_reason()
 ```
 
+![E-VoteChain System Flow](./screenshots/system_flow.png)
+
 ---
 
 ## 🗳️ Voting Flow

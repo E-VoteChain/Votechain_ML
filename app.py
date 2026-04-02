@@ -23,7 +23,7 @@ load_dotenv() # Load .env file for local development
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if GEMINI_API_KEY:
     configure_gemini(api_key=GEMINI_API_KEY)
-    gemini_model_instance = GenerativeModel("gemma-3-4b-it") # Or your preferred model
+    gemini_model_instance = GenerativeModel("gemini-2.5-flash") # Or your preferred model
 else:
     print("CRITICAL: GEMINI_API_KEY not found. OCR functionality will fail.")
     gemini_model_instance = None # Handle this appropriately
@@ -205,8 +205,280 @@ def process_and_verify_endpoint():
             try: os.remove(live_face_path)
             except Exception as e_clean: print(f"Error cleaning live face file on exception: {e_clean}")
         return jsonify(response_data), 500
+    
 
-# ... rest of app.py ...
+@app.route('/process_and_verify_stream', methods=['POST'])
+def process_and_verify_stream():
+    """
+    Same pipeline as /process_and_verify but streams SSE events so the
+    frontend can show each stage — and each sub-step — updating live.
+ 
+    SSE event shapes:
+      Stage event:
+        { "stage": "document"|"liveness"|"face_match"|"storage",
+          "status": "running"|"passed"|"failed"|"skipped",
+          "detail": "..." }
+ 
+      Sub-step event (document stage only):
+        { "stage": "document",
+          "substage": "ocr"|"face",
+          "status": "running"|"passed"|"failed",
+          "detail": "..." }
+ 
+      Done event:
+        { "stage": "done", "status": "passed"|"failed",
+          "overall": "success"|"failed",
+          "data": { ...full BackendResponse... } }
+    """
+    import json
+    from flask import Response, stream_with_context
+ 
+    def abort_stream(detail):
+        def _gen():
+            yield f"data: {json.dumps({'stage':'done','status':'failed','overall':'failed','detail':detail})}\n\n"
+        return Response(stream_with_context(_gen()), mimetype='text/event-stream')
+ 
+    if gemini_model_instance is None:
+        return abort_stream("OCR service unavailable — missing Gemini API key.")
+ 
+    if 'id_card_image' not in request.files or 'live_face_image' not in request.files:
+        return abort_stream("Missing id_card_image or live_face_image.")
+ 
+    id_card_file   = request.files['id_card_image']
+    live_face_file = request.files['live_face_image']
+ 
+    if not (allowed_file(id_card_file.filename) and allowed_file(live_face_file.filename)):
+        return abort_stream("Invalid file type. Allowed: png, jpg, jpeg.")
+ 
+    # Save files before entering the generator (can't read request.files inside it)
+    id_filename   = secure_filename(f"{uuid.uuid4()}_{id_card_file.filename}")
+    live_filename = secure_filename(f"{uuid.uuid4()}_{live_face_file.filename}")
+    id_card_path   = os.path.join(app.config['UPLOAD_FOLDER'], id_filename)
+    live_face_path = os.path.join(app.config['UPLOAD_FOLDER'], live_filename)
+    id_card_file.save(id_card_path)
+    live_face_file.save(live_face_path)
+ 
+    _id_card_path   = id_card_path
+    _live_face_path = live_face_path
+    _gemini         = gemini_model_instance
+    _liveness_ref   = DUMMY_LIVENESS_REF_IMAGE
+ 
+    def evt(stage, status, detail=None, substage=None, overall=None, data=None):
+        payload = {"stage": stage, "status": status}
+        if substage: payload["substage"] = substage
+        if detail:   payload["detail"]   = detail
+        if overall:  payload["overall"]  = overall
+        if data:     payload["data"]     = data
+        return f"data: {json.dumps(payload)}\n\n"
+ 
+    def generate():
+        response_data = {
+            "text_details": None,
+            "id_card_processing_status": "Not Processed",
+            "liveness_check":    {"passed": False, "status": "Not Performed"},
+            "face_verification": {"verified": False, "status": "Not Performed"},
+            "database_storage":  {"stored": False, "message": "Not Attempted"},
+            "overall_status": "Failed",
+        }
+        extracted_details = {}
+        id_embedding      = None
+ 
+        try:
+            # ════════════════════════════════════════════════════════════════════
+            # STAGE 1 — Document Processing  (2 visible sub-steps)
+            # ════════════════════════════════════════════════════════════════════
+            yield evt("document", "running",
+                      "Starting document processing — OCR then face extraction...")
+ 
+            # ── Sub-step 1a: Gemini OCR ──────────────────────────────────────
+            yield evt("document", "running",
+                      substage="ocr",
+                      detail="Sending ID card to Gemini Vision for text extraction...")
+ 
+            try:
+                extracted_details = id_card_processor.extract_text_from_id(
+                    _id_card_path, _gemini
+                )
+            except Exception as ocr_err:
+                traceback.print_exc()
+                extracted_details = {"error": str(ocr_err)}
+ 
+            response_data["text_details"] = extracted_details
+ 
+            if "error" in extracted_details or "id_processing_error" in extracted_details:
+                err = extracted_details.get("error",
+                      extracted_details.get("id_processing_error", "Unknown OCR error"))
+                yield evt("document", "failed",
+                          substage="ocr",
+                          detail=f"Gemini OCR failed: {err}")
+                yield evt("document", "failed",
+                          detail=f"OCR could not extract details from the ID card. {err}")
+                for s in ("liveness", "face_match", "storage"):
+                    yield evt(s, "skipped", "Skipped — document OCR failed.")
+                response_data["id_card_processing_status"] = f"Failed: {err}"
+                response_data["overall_status"] = "Failed: ID card OCR error."
+                yield evt("done", "failed", overall="failed", data=response_data)
+                return
+ 
+            # Build a human-readable OCR summary
+            name    = extracted_details.get("name", "")
+            card    = extracted_details.get("card_type", "ID card")
+            dob     = extracted_details.get("dob", "")
+            doc_num = (extracted_details.get("aadhaar_no")
+                       or extracted_details.get("pan_no")
+                       or extracted_details.get("voter_id_number")
+                       or extracted_details.get("license_no", ""))
+            ocr_summary = (
+                f"{card} — Name: {name}"
+                + (f" | DOB: {dob}" if dob else "")
+                + (f" | Doc No: {doc_num}" if doc_num else "")
+            )
+ 
+            yield evt("document", "passed",
+                      substage="ocr",
+                      detail=ocr_summary)
+ 
+            # ── Sub-step 1b: Face Extraction ─────────────────────────────────
+            yield evt("document", "running",
+                      substage="face",
+                      detail="Detecting face on ID card using RetinaFace → CLAHE preprocessing → Facenet embedding...")
+ 
+            id_embedding, face_info = id_card_processor.extract_face_from_id(_id_card_path)
+ 
+            if id_embedding is None:
+                yield evt("document", "failed",
+                          substage="face",
+                          detail=f"Face extraction failed: {face_info}")
+                yield evt("document", "failed",
+                          detail=f"Could not extract face from ID card. {face_info}")
+                for s in ("liveness", "face_match", "storage"):
+                    yield evt(s, "skipped", "Skipped — no face found on ID card.")
+                response_data["id_card_processing_status"] = f"Failed: {face_info}"
+                response_data["overall_status"] = "Failed: No face detected on ID card."
+                yield evt("done", "failed", overall="failed", data=response_data)
+                return
+ 
+            yield evt("document", "passed",
+                      substage="face",
+                      detail=f"{face_info}")
+ 
+            # Stage 1 fully passed
+            response_data["id_card_processing_status"] = \
+                "Successfully processed ID card text and face."
+            yield evt("document", "passed",
+                      detail=f"{card} verified. OCR complete, face embedding ready.")
+ 
+            # ════════════════════════════════════════════════════════════════════
+            # STAGE 2 — Liveness Detection
+            # ════════════════════════════════════════════════════════════════════
+            yield evt("liveness", "running",
+                      "Checking that the live photo is a real person (anti-spoofing)...")
+ 
+            liveness_passed, liveness_msg = face_verifier.perform_liveness_check(
+                _live_face_path, _liveness_ref
+            )
+            response_data["liveness_check"]["passed"] = liveness_passed
+            response_data["liveness_check"]["status"]  = liveness_msg
+ 
+            if not liveness_passed:
+                yield evt("liveness", "failed",
+                          f"Liveness failed: {liveness_msg}. "
+                          "Ensure you're using a real photo in good lighting — "
+                          "not a screen or printout.")
+                yield evt("face_match", "skipped", "Skipped — liveness check did not pass.")
+                yield evt("storage",    "skipped", "Skipped — liveness check did not pass.")
+                response_data["overall_status"] = "Failed: Liveness check failed."
+                yield evt("done", "failed", overall="failed", data=response_data)
+                return
+ 
+            yield evt("liveness", "passed", f"Real person confirmed. {liveness_msg}")
+ 
+            # ════════════════════════════════════════════════════════════════════
+            # STAGE 3 — Face Matching
+            # ════════════════════════════════════════════════════════════════════
+            yield evt("face_match", "running",
+                      "Comparing live face to ID card embedding using cosine similarity...")
+ 
+            verification_passed, vd = face_verifier.verify_faces(
+                _live_face_path, id_embedding
+            )
+            response_data["face_verification"] = vd
+            response_data["face_verification"]["status"] = vd.get("message", "Unknown")
+ 
+            distance  = vd.get("distance",  "N/A")
+            threshold = vd.get("threshold", "N/A")
+            model     = vd.get("model",     "Facenet")
+ 
+            if not verification_passed:
+                yield evt("face_match", "failed",
+                          f"Face did not match. Distance: {distance} "
+                          f"(threshold: {threshold}, model: {model}). "
+                          "The live photo does not match the face on the ID card.")
+                yield evt("storage", "skipped", "Skipped — face verification failed.")
+                response_data["overall_status"] = "Failed: Face verification failed."
+                yield evt("done", "failed", overall="failed", data=response_data)
+                return
+ 
+            yield evt("face_match", "passed",
+                      f"Face matched. Distance: {distance} "
+                      f"(threshold: {threshold}, model: {model})")
+ 
+            # ════════════════════════════════════════════════════════════════════
+            # STAGE 4 — Database Storage
+            # ════════════════════════════════════════════════════════════════════
+            yield evt("storage", "running",
+                      "Storing verified identity securely in the database...")
+ 
+            try:
+                db_success, db_message = db_storer.store_verified_user_details(
+                    extracted_details, id_embedding
+                )
+                response_data["database_storage"]["stored"]  = db_success
+                response_data["database_storage"]["message"] = db_message
+ 
+                if db_success:
+                    yield evt("storage", "passed", f"Stored successfully. {db_message}")
+                    response_data["overall_status"] = \
+                        "Success: Liveness, Face Verification, and Database Storage Passed."
+                    yield evt("done", "passed", overall="success", data=response_data)
+                else:
+                    yield evt("storage", "failed", f"Storage warning: {db_message}")
+                    response_data["overall_status"] = \
+                        "Partial Success: Verification passed but database storage failed."
+                    yield evt("done", "passed", overall="success", data=response_data)
+ 
+            except Exception as db_err:
+                traceback.print_exc()
+                yield evt("storage", "failed", f"Database error: {str(db_err)}")
+                response_data["database_storage"]["message"] = str(db_err)
+                response_data["overall_status"] = "Partial: Verification passed, storage failed."
+                yield evt("done", "passed", overall="success", data=response_data)
+ 
+        except Exception as e:
+            traceback.print_exc()
+            yield evt("done", "failed",
+                      detail=f"Unexpected server error: {str(e)}",
+                      overall="failed",
+                      data=response_data)
+ 
+        finally:
+            for path in [_id_card_path, _live_face_path]:
+                if path and os.path.exists(path):
+                    try:
+                        os.remove(path)
+                    except Exception as e_clean:
+                        print(f"Cleanup error: {e_clean}")
+ 
+    return Response(
+        stream_with_context(generate()),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control':     'no-cache',
+            'X-Accel-Buffering': 'no',
+        },
+    )
+ 
+ 
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=True)
