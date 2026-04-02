@@ -136,7 +136,7 @@ else:
 ```
 ## 🚀 System Architecture
 <p align="center">
-  <img src="./screenshots/system_flow.png" alt="System Flow" width="700"/>
+  <img src="./screenshots/system_flow.png" alt="System Flow" width="500"/>
 </p>
 
 ---
