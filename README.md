@@ -20,9 +20,15 @@
 
 ## Live Demo 📽️
 
-[![Demo 1](https://img.shields.io/badge/Watch-Demo_1-blue?style=for-the-badge)](https://drive.google.com/file/d/18NpKtWQt8e1BNvjYnfoJ9QyaeeNdB_G9/view?usp=sharing)
+## Live Demo 📽️
 
-[![Demo 2](https://img.shields.io/badge/Watch-Demo_2-green?style=for-the-badge)](https://drive.google.com/file/d/1QYADebGyuPvEOV5JS32PQ1NHIHvEGRo_/view?usp=sharing)
+<a href="https://drive.google.com/file/d/18NpKtWQt8e1BNvjYnfoJ9QyaeeNdB_G9/view?usp=sharing" target="_blank">
+  <img src="https://img.shields.io/badge/Watch-Demo_1-blue?style=for-the-badge" />
+</a>
+
+<a href="https://drive.google.com/file/d/1QYADebGyuPvEOV5JS32PQ1NHIHvEGRo_/view?usp=sharing" target="_blank">
+  <img src="https://img.shields.io/badge/Watch-Demo_2-green?style=for-the-badge" />
+</a>
 
 
 ## 🧩 The Problem
