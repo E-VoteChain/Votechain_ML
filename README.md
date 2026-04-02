@@ -134,8 +134,10 @@ if similarity >= THRESHOLD and liveness_score >= LIVENESS_THRESHOLD:
 else:
     reject_with_reason()
 ```
-
-![E-VoteChain System Flow](./screenshots/system_flow.png)
+## 🚀 System Architecture
+<p align="center">
+  <img src="./screenshots/system_flow.png" alt="System Flow" width="700"/>
+</p>
 
 ---
 
